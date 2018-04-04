@@ -1,4 +1,4 @@
-exports.getBody = req => {
+exports.getBody = function(req) {
     return new Promise(function(resolve, reject) {
         let buf = ''
         req.on('data', chunk => {
