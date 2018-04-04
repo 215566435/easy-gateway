@@ -1,13 +1,14 @@
+const { UrlConvertor } = require('../src/lib/utils')
+
 const http = require('http')
 const EasyProxy = require('../src/index')
 const { expect } = require('chai')
 const request = require('supertest')
+const assert = require('assert')
 
-function startProxyServer() {
+function startProxyServer(opts) {
     return new Promise((resolve, reject) => {
-        const px = new EasyProxy({
-            targets: ['127.0.0.1:3001', '127.0.0.1:3002', '127.0.0.1:3003']
-        })
+        const px = new EasyProxy(opts)
         const re = px.run(3000, () => {
             resolve(re)
         })
@@ -43,7 +44,12 @@ describe('测试反向代理', function() {
         exampleServers.push(await startExampleServer(3001))
         exampleServers.push(await startExampleServer(3002))
         exampleServers.push(await startExampleServer(3003))
-        server = await startProxyServer()
+        server = await startProxyServer({
+            targets: ['127.0.0.1:3001', '127.0.0.1:3002', '127.0.0.1:3003'],
+            onResponse: async (ctx, resFromRemote) => {
+                return resFromRemote
+            }
+        })
     })
 
     // 测试结束后关闭服务器
@@ -61,9 +67,9 @@ describe('测试反向代理', function() {
             .expect(`3001: GET /hello`)
 
         await request(server)
-            .get('/hello')
+            .get('/api/hello')
             .expect(200)
-            .expect(`3002: GET /hello`)
+            .expect(`3002: GET /api/hello`)
 
         await request(server)
             .get('/hello')
@@ -85,5 +91,22 @@ describe('测试反向代理', function() {
             })
             .expect(200)
             .expect(`3002: POST /xyz {"a":123,"b":456}`)
+    })
+})
+
+describe('工具类测试', function() {
+    it('判断url是否有http/https', () => {
+        const i = UrlConvertor(['127.0.0.1:3001', '127.0.0.1:3002'])
+        i.forEach(url => {
+            assert(/http/.test(url) === true)
+        })
+
+        const u = UrlConvertor([
+            'http://127.0.0.1:3001',
+            'https://127.0.0.1:3002'
+        ])
+        u.forEach(url => {
+            assert(/http/.test(url) === true)
+        })
     })
 })

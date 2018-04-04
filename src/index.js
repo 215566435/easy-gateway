@@ -1,18 +1,11 @@
-const rawBody = require('./lib/rawbody').getBody
 const Stream = require('stream')
 const Koa = require('koa')
 const axios = require('axios').default
 const assert = require('assert')
 const ReadableStream = require('stream').Readable
 
-function UrlConvertor(targets) {
-    return targets.map(function(url) {
-        if (/http/.test(url) || /https/.test(url)) {
-            return url
-        }
-        return `http://${url}`
-    })
-}
+const rawBody = require('./lib/rawbody').getBody
+const { UrlConvertor } = require('./lib/utils')
 
 class EasyProxy extends Koa {
     constructor(options) {
@@ -43,35 +36,42 @@ class EasyProxy extends Koa {
     }
 
     setUp() {
-        this.use(
-            async function(ctx, next) {
-                try {
-                    let result = await rawBody(ctx.req)
+        this.use(async (ctx, next) => {
+            try {
+                let result = await rawBody(ctx.req)
 
-                    const target = this.selector()
-                    const res = await axios({
-                        headers: ctx.req.headers,
-                        url: target + ctx.url,
-                        method: ctx.req.method,
-                        data: result,
-                        path: ctx.url,
-                        responseType: 'stream' //all returning is string
-                    })
+                const target = this.selector()
+                const res = await axios({
+                    headers: ctx.req.headers,
+                    url: target + ctx.url,
+                    method: ctx.req.method,
+                    data: result,
+                    path: ctx.url,
+                    responseType: 'stream' //all returning is string
+                })
 
-                    ctx.set({
-                        ...res.headers
-                    })
-                    // console.log(` ${ctx.req.method} ${ctx.url} ====> ${target}`)
-                    ctx.set('Content-type', 'plain/text')
-                    await next()
+                ctx.set({
+                    ...res.headers
+                })
+
+                ctx.set('Content-type', 'plain/text')
+                await next()
+
+                //if user specify their own onResponse function
+                const resultFromUser =
+                    this.options.onResponse &&
+                    (await this.options.onResponse(ctx, res.data))
+                if (resultFromUser) {
+                    ctx.body = resultFromUser
+                } else {
                     ctx.body = res.data
-                } catch (e) {
-                    console.log(e.message)
-                    ctx.body = 'server internal error'
-                    ctx.status = 500
                 }
-            }.bind(this)
-        )
+            } catch (e) {
+                console.log(e.message)
+                ctx.body = 'server internal error'
+                ctx.status = 500
+            }
+        })
     }
 
     run(port, fn) {
