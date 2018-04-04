@@ -45,9 +45,8 @@ describe('测试反向代理', function() {
         exampleServers.push(await startExampleServer(3002))
         exampleServers.push(await startExampleServer(3003))
         server = await startProxyServer({
-            targets: ['127.0.0.1:3001', '127.0.0.1:3002', '127.0.0.1:3003'],
-            onResponse: async (ctx, resFromRemote) => {
-                return resFromRemote
+            urlmap: {
+                '/': ['127.0.0.1:3001', '127.0.0.1:3002', '127.0.0.1:3003']
             }
         })
     })

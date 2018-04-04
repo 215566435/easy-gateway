@@ -5,18 +5,40 @@ const assert = require('assert')
 const ReadableStream = require('stream').Readable
 
 const rawBody = require('./lib/rawbody').getBody
+
 const { UrlConvertor } = require('./lib/utils')
+
+class Selector {
+    constructor(targets) {
+        this._targetIndex = 0
+        assert.equal(targets instanceof Array, true)
+        this.targets = UrlConvertor(targets)
+        this.select = this.select.bind(this)
+    }
+
+    select() {
+        const len = this.targets.length
+        if (this._targetIndex >= len) {
+            this._targetIndex = 0
+        }
+        const target = this.targets[this._targetIndex]
+        this._targetIndex++
+        return target
+    }
+}
 
 class EasyProxy extends Koa {
     constructor(options) {
         super()
         this.options = options || {}
-        assert.equal(this.options.targets instanceof Array, true)
-
-        this.options.targets = UrlConvertor(this.options.targets)
+        Object.keys(this.options.urlmap).forEach(path => {
+            console.log(path, this.options.urlmap[path])
+            this.options.urlmap[path] = new Selector(this.options.urlmap[path])
+            
+        })
 
         this.setUp = this.setUp.bind(this)
-        this.selector = this.selector.bind(this)
+        this.fromMap = this.fromMap.bind(this)
 
         //for round-robin
         this._targetIndex = 0
@@ -25,14 +47,8 @@ class EasyProxy extends Koa {
         this.setUp()
     }
 
-    selector() {
-        const len = this.options.targets.length
-        if (this._targetIndex >= len) {
-            this._targetIndex = 0
-        }
-        const target = this.options.targets[this._targetIndex]
-        this._targetIndex++
-        return target
+    fromMap(path) {
+        return this.options.urlmap[path].select()
     }
 
     setUp() {
@@ -40,7 +56,8 @@ class EasyProxy extends Koa {
             try {
                 let result = await rawBody(ctx.req)
 
-                const target = this.selector()
+                const target = this.fromMap(ctx.url)
+
                 const res = await axios({
                     headers: ctx.req.headers,
                     url: target + ctx.url,
